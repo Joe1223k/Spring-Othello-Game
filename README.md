@@ -1,3 +1,3 @@
 # Spring-Othello-Game
 
-![Screenshot](res/spring_othello_image.png)
+![Screenshot](spring_othello_image.png)
