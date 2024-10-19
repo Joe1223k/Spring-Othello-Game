@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Springオセロゲーム</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            position: relative;
+        }
+
+        #game-container {
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
+            gap: 2px;
+            margin: 20px auto;
+        }
+
+        .cell {
+            width: 60px;
+            height: 60px;
+            background-color: #228B22;
+            border: 2px solid #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .white {
+            background-color: white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+        }
+
+        .black {
+            background-color: black;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+        }
+
+        #turn {
+            margin-top: 20px;
+            font-size: 30px;
+            color: #000;
+            text-shadow: 2px 2px 0px white, -2px -2px 0px white, 2px -2px 0px white, -2px 2px 0px white; /* 四方に白い影を追加 */
+        }
+
+        #scoreboard {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            width: 200px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        #result {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 36px;
+            color: red;
+            text-shadow: 2px 2px 0px white, -2px -2px 0px white, 2px -2px 0px white, -2px 2px 0px white; /* 四方に白い影を追加 */
+            display: none;
+            text-align: center;
+        }
+    </style>
+    <script>
+        let currentPlayer = 1;
+        let boardState = [];
+        let gameFinished = false;
+
+        async function initializeBoard() {
+            const boardDiv = document.getElementById("board");
+            boardDiv.innerHTML = '';
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const cell = document.createElement("div");
+                    cell.classList.add("cell");
+                    cell.id = `cell-${i}-${j}`;
+                    cell.onclick = () => makeMove(i, j);
+                    boardDiv.appendChild(cell);
+                }
+            }
+        }
+
+        function updateCell(x, y, player) {
+            const cell = document.getElementById(`cell-${x}-${y}`);
+            cell.innerHTML = "";
+
+            const stone = document.createElement("div");
+            if (player === 1) {
+                stone.classList.add("white");
+            } else if (player === 2) {
+                stone.classList.add("black");
+            }
+            cell.appendChild(stone);
+        }
+
+        async function fetchBoard() {
+            const response = await fetch('/game/board');
+            const board = await response.json();
+            boardState = board;
+            for (let i = 0; i < board.length; i++) {
+                for (let j = 0; j < board[i].length; j++) {
+                    updateCell(i, j, board[i][j]);
+                }
+            }
+
+            const turnResponse = await fetch('/game/turn');
+            currentPlayer = await turnResponse.json();
+            document.getElementById("turn").innerText = `現在のターン: プレイヤー${currentPlayer === 1 ? " 白 (○)" : " 黒 (●)"}`;
+
+            const scoreResponse = await fetch('/game/scores');
+            const scores = await scoreResponse.json();
+            document.getElementById("whiteScore").innerText = scores[0];
+            document.getElementById("blackScore").innerText = scores[1];
+
+            checkGameStatus();
+        }
+
+        async function checkGameStatus() {
+            const response = await fetch('/game/status');
+            const status = await response.json();
+            gameFinished = status.finished;
+
+            if (gameFinished) {
+                let resultMessage;
+                if (status.winner === 1) {
+                    resultMessage = "ゲーム終了: 白の勝ちです！";
+                } else if (status.winner === 2) {
+                    resultMessage = "ゲーム終了: 黒の勝ちです！";
+                } else {
+                    resultMessage = "ゲーム終了: 引き分けです！";
+                }
+                displayResult(resultMessage);
+            }
+        }
+
+        function displayResult(resultMessage) {
+            const resultDiv = document.getElementById("result");
+            resultDiv.innerHTML = `${resultMessage}<br>ENTERでリスタート`;
+            resultDiv.style.display = "block";
+        }
+
+        function hideResult() {
+            const resultDiv = document.getElementById("result");
+            resultDiv.style.display = "none";
+        }
+
+        async function restartGame() {
+            await fetch('/game/restart', { method: 'POST' });
+            hideResult();
+            initializeBoard();
+            fetchBoard();
+        }
+
+        window.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" && gameFinished) {
+                restartGame();
+            }
+        });
+
+        window.onload = () => {
+            initializeBoard();
+            fetchBoard();
+        };
+
+        async function makeMove(x, y) {
+            if (!gameFinished) {
+                await fetch(`/game/move?x=${x}&y=${y}`, { method: 'POST' });
+                fetchBoard();
+            }
+        }
+
+        window.addEventListener("keydown", async (event) => {
+            if (event.key === 'w' || event.key === 'W') {
+                await fetch('/game/fillBoard?player=1', { method: 'POST' });
+                fetchBoard();
+            } else if (event.key === 'b' || event.key === 'B') {
+                await fetch('/game/fillBoard?player=2', { method: 'POST' });
+                fetchBoard();
+            }
+        });
+
+    </script>
+</head>
+<body>
+    <div id="game-container">
+        <h1>Springオセロゲーム</h1>
+        <div id="scoreboard">
+            <div>白: <span id="whiteScore">0</span></div>
+            <div>黒: <span id="blackScore">0</span></div>
+        </div>
+        <div id="board"></div>
+        <div id="turn">プレイヤー1のターン</div>
+        <div id="result"></div>
+    </div>
+</body>
+</html>
